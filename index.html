@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لعبة ضرب الكور</title>
+<style>
+body{margin:0;background:#0f172a;font-family:Arial;color:white;text-align:center;}
+#game{width:350px;height:420px;background:#1e293b;margin:auto;margin-top:20px;border-radius:10px;position:relative;overflow:hidden;}
+.ball{width:40px;height:40px;border-radius:50%;position:absolute;cursor:pointer;animation:pop .2s;}
+@keyframes pop{0%{transform:scale(0)}100%{transform:scale(1)}}
+button{padding:10px;border:none;border-radius:10px;background:orange;color:white;margin:5px;cursor:pointer;}
+#store{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#020617;padding:20px;border-radius:15px;width:300px;max-height:400px;overflow:auto;}
+.card{background:#1e293b;padding:10px;margin:10px;border-radius:10px;}
+.icon{width:30px;height:30px;border-radius:50%;margin:auto;}
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;justify-content:center;align-items:center;flex-direction:column;font-size:24px;cursor:pointer;}
+#tutorial{max-width:400px;margin:auto;background:#1e293b;padding:10px;border-radius:10px;margin-bottom:10px;text-align:right;font-size:14px;}
+#info{font-size:16px;margin-top:10px;}
+</style>
+</head>
+<body>
+
+<h2>🎮 لعبة ضرب الكور</h2>
+
+<div id="tutorial">
+📖 <b>شرح اللعبة</b><br>
+اضغط على الكور بسرعة لتحصل على نقاط وفلوس.<br>
+🔴 الكور الحمراء تعطي نقاط ومجانية في المتجر.<br>
+⚫ الكور السوداء تخسرك فورًا.<br>
+كل مستوى:<br>
+- الوقت يزيد تدريجيًا<br>
+- النقاط المطلوبة تزيد تدريجيًا<br>
+استخدم الفلوس في المتجر لشراء كور جديدة أو فتح صناديق 🎁<br>
+الهدف: الوصول إلى المستوى 50.
+</div>
+
+<div id="info">
+المستوى <span id="level">1</span> |
+النقاط <span id="score">0</span> |
+الفلوس 💰 <span id="coins">0</span> |
+الوقت ⏱ <span id="time">10</span>
+</div>
+
+<div id="game"></div>
+
+<br>
+
+<button id="startBtn" onclick="startGame()">بدء اللعب</button>
+<button onclick="openStore()">المتجر</button>
+<button onclick="resetGame()">إعادة</button>
+
+<div id="store">
+<h3>🛒 المتجر</h3>
+<div id="storeItems"></div>
+<h3>🎁 الصناديق</h3>
+<button onclick="openBox('normal')">صندوق عادي (200)</button>
+<button onclick="openBox('rare')">صندوق نادر (500)</button>
+<button onclick="openBox('legend')">صندوق أسطوري (1000)</button>
+<br><br>
+<button onclick="closeStore()">إغلاق</button>
+</div>
+
+<script>
+// المتغيرات الأساسية
+let level=1;
+let score=0;        
+let coins=0;        
+let timeLeft=10;
+let target=10;
+let timer;
+let running=false;
+let bought={};
+let game=document.getElementById("game");
+
+// كور المتجر
+let balls=[
+{color:"red",price:0,bonus:0},   // مجانية
+{color:"blue",price:50,bonus:1},
+{color:"green",price:100,bonus:2},
+{color:"purple",price:150,bonus:3},
+{color:"gold",price:200,bonus:4},
+{color:"pink",price:250,bonus:5}
+];
+let secretBalls=[
+{color:"cyan",bonus:6},
+{color:"lime",bonus:7},
+{color:"orange",bonus:8},
+{color:"magenta",bonus:9},
+{color:"white",bonus:10}
+];
+
+// تحديث واجهة المستخدم
+function updateUI(){
+document.getElementById("level").innerText=level;
+document.getElementById("score").innerText=score;
+document.getElementById("coins").innerText=coins;
+document.getElementById("time").innerText=timeLeft;
+}
+
+// بدء اللعبة
+function startGame(){
+score=0;
+timeLeft=10+(level-1)*5;  // الوقت حسب المستوى
+target=10*level;
+running=true;
+document.getElementById("startBtn").disabled=true;
+
+clearInterval(timer); // مسح أي مؤقت قديم
+timer=setInterval(()=>{
+    if(!running) return; // لو مش شغال ما ينقصش الوقت
+    timeLeft--;
+    updateUI();
+    if(timeLeft<=0){
+        clearInterval(timer);
+        if(score>=target){ showLevelComplete(); }
+        else{ gameOver(); }
+    }
+},1000);
+
+spawn();
+}
+
+// إنشاء الكور
+function spawn(){
+if(!running)return;
+let redCount=Math.floor(Math.random()*2)+1;
+for(let i=0;i<redCount;i++){ createBall("red","good"); }
+let bad=Math.min(level,4);
+for(let i=0;i<bad;i++){ createBall("black","bad"); }
+for(let c in bought){ createBall(c,"good"); }
+setTimeout(spawn,700-Math.min(level*20,500));
+}
+
+function createBall(color,type){
+let ball=document.createElement("div");
+ball.className="ball";
+ball.style.background=color;
+ball.style.left=Math.random()*300+"px";
+ball.style.top=Math.random()*350+"px";
+ball.onclick=function(){
+if(type=="bad"){ 
+    gameOver(); 
+} else {
+    score++; coins++;
+    let item=balls.find(b=>b.color==color);
+    if(item){ score+=item.bonus; }
+    updateUI();
+    if(score >= target){
+        running = false;
+        clearInterval(timer);
+        showLevelComplete();
+    }
+}
+ball.remove();
+}
+game.appendChild(ball);
+setTimeout(()=>{ball.remove()},1500);
+}
+
+// شاشة إنهاء المستوى مع احتفالات متحركة بعد 50
+function showLevelComplete(){
+running=false;
+clearInterval(timer); // إيقاف الوقت فورًا
+document.querySelectorAll(".ball").forEach(b=>b.remove());
+
+let o=document.createElement("div");
+o.className="overlay";
+
+if(level>=50){
+    o.innerHTML="🎉 أدهم فخور بيك!<br>لقد أنهيت اللعبة<br>اضغط على الشاشة للمتابعة";
+    document.body.appendChild(o);
+    for(let i=0;i<30;i++){
+        let star=document.createElement("div");
+        star.style.position="absolute";
+        star.style.width="10px";
+        star.style.height="10px";
+        star.style.background="yellow";
+        star.style.borderRadius="50%";
+        star.style.left=Math.random()*window.innerWidth+"px";
+        star.style.top=Math.random()*window.innerHeight+"px";
+        star.style.opacity=0.8;
+        star.style.pointerEvents="none";
+        star.style.transition="all 2s linear";
+        document.body.appendChild(star);
+
+        setTimeout(()=>{
+            star.style.top=(parseFloat(star.style.top)-100- Math.random()*100)+"px";
+            star.style.left=(parseFloat(star.style.left)+Math.random()*200-100)+"px";
+            star.style.opacity=0;
+        },50);
+
+        setTimeout(()=>{star.remove()},2100);
+    }
+} else if(timeLeft>=5){
+    o.innerHTML="🏆 أدهم يهنّيك!<br>اضغط على الشاشة للمتابعة";
+    document.body.appendChild(o);
+} else {
+    o.innerHTML=`🎉 لقد تأهلت للمستوى ${level}<br>اضغط على الشاشة للمتابعة`;
+    document.body.appendChild(o);
+}
+
+o.onclick=function(){
+    o.remove();
+    if(level>=50){
+        showMainScreen(); // اللعبة خلصت
+        return;
+    }
+    level++;  // رفع المستوى بعد التهنئة
+    updateUI();
+    showMainScreen();
+}
+}
+
+// العودة للواجهة الرئيسية بعد إنهاء المستوى
+function showMainScreen(){
+document.getElementById("tutorial").style.display="block";
+document.getElementById("info").style.display="block";
+document.getElementById("game").style.display="block";
+document.getElementById("startBtn").disabled=false;
+updateUI();
+}
+
+// الخسارة
+function gameOver(){
+running=false;
+clearInterval(timer); // توقيف الوقت فورًا
+document.querySelectorAll(".ball").forEach(b=>b.remove());
+let o=document.createElement("div");
+o.className="overlay";
+o.innerHTML="💀 خسرت<br>اضغط للمتابعة";
+o.onclick=function(){ 
+    o.remove(); 
+    score=0; 
+    timeLeft=10+(level-1)*5; 
+    updateUI(); 
+    document.getElementById("startBtn").disabled=false;
+}
+document.body.appendChild(o);
+}
+
+// المتجر
+function openStore(){ document.getElementById("store").style.display="block"; }
+function closeStore(){ document.getElementById("store").style.display="none"; }
+
+// تحميل المتجر مع الكورة الحمراء مجانية
+function loadStore(){
+let container=document.getElementById("storeItems");
+balls.forEach(b=>{
+let card=document.createElement("div");
+card.className="card";
+let icon=document.createElement("div");
+icon.className="icon";
+icon.style.background=b.color;
+
+let btn=document.createElement("button");
+if(b.color=="red"){ btn.innerText="مجانا"; }
+else{ btn.innerText=b.price; }
+
+btn.onclick=function(){
+if(b.color!="red" && coins<b.price){ 
+    alert("فلوسك لا تكفي"); 
+    return; 
+}
+if(b.color!="red") coins-=b.price;
+bought[b.color]=true;
+btn.innerText="تم الشراء";
+btn.disabled=true;
+updateUI();
+}
+
+card.appendChild(icon);
+card.appendChild(btn);
+container.appendChild(card);
+});
+}
+loadStore();
+updateUI();
+
+// فتح الصناديق
+function openBox(type){
+let price=200;
+if(type=="rare") price=500;
+if(type=="legend") price=1000;
+if(coins<price){ alert("لا يوجد فلوس كافية"); return; }
+coins-=price;
+let pool=balls;
+if(type=="rare"){ pool=balls.concat(secretBalls.slice(0,2)); }
+if(type=="legend"){ pool=balls.concat(secretBalls); }
+let reward=pool[Math.floor(Math.random()*pool.length)];
+bought[reward.color]=true;
+showBoxAnimation(reward.color);
+updateUI();
+}
+
+// أنيميشن الصندوق
+function showBoxAnimation(color){
+let box=document.createElement("div");
+box.className="overlay";
+box.innerHTML="🎁 جاري فتح الصندوق...";
+document.body.appendChild(box);
+setTimeout(()=>{
+box.innerHTML=`🎉 ربحت كرة جديدة
+<br><br>
+<div style="width:60px;height:60px;border-radius:50%;background:${color};margin:auto"></div>
+<br>اضغط للمتابعة`;
+box.onclick=()=>box.remove();
+},1500);
+}
+
+// إعادة اللعبة
+function resetGame(){
+score = 0;
+coins = 0;
+level = 1;
+bought = {};
+timeLeft = 10;
+updateUI();
+document.querySelectorAll(".ball").forEach(b => b.remove());
+document.getElementById("startBtn").disabled=false;
+}
+
+</script>
+
+</body>
+</html>
